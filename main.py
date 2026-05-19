@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import anthropic
+import google.generativeai as genai
 import os
 from supabase import create_client
 import logging
@@ -20,8 +20,10 @@ app.add_middleware(
     allow_headers=["*"],
 )
 
-# Clients
-anthropic_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
+# Configure Gemini
+genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+
+# Supabase client
 supabase = create_client(
     os.getenv("SUPABASE_URL"),
     os.getenv("SUPABASE_SERVICE_KEY")
@@ -77,7 +79,7 @@ async def handle_message(request: Request):
         if not message_text:
             return {"status": "no_text"}
         
-        # Process with Claude
+        # Process with Gemini
         response = await process_with_claude(customer_number, message_text, "default")
         
         # Send reply via WhatsApp
@@ -90,7 +92,7 @@ async def handle_message(request: Request):
         return {"status": "error", "detail": str(e)}
 
 async def process_with_claude(customer_number: str, message: str, org_id: str):
-    """Process message with Claude and return response"""
+    """Process message with Gemini and return response"""
     
     system_prompt = """You are a professional customer support agent for an e-commerce company.
 
@@ -104,17 +106,14 @@ Rules:
 If you need to escalate, end response with: [ESCALATE]"""
 
     try:
-        response = anthropic_client.messages.create(
-            model="claude-sonnet-4-20250514",
-            max_tokens=300,
-            system=system_prompt,
-            messages=[{
-                "role": "user",
-                "content": message
-            }]
-        )
+        # Create Gemini model
+        model = genai.GenerativeModel('gemini-1.5-flash')
         
-        reply = response.content[0].text
+        # Generate response
+        full_prompt = f"{system_prompt}\n\nCustomer message: {message}\n\nYour response:"
+        response = model.generate_content(full_prompt)
+        
+        reply = response.text
         escalated = "[ESCALATE]" in reply
         
         # Remove escalation marker from customer-facing message
@@ -130,7 +129,7 @@ If you need to escalate, end response with: [ESCALATE]"""
         }
         
     except Exception as e:
-        logger.error(f"Claude API error: {e}")
+        logger.error(f"Gemini API error: {e}")
         fallback_reply = "Sorry, I'm having trouble processing your request. A human agent will contact you shortly."
         log_conversation(org_id, customer_number, message, fallback_reply, True)
         return {"reply": fallback_reply, "escalated": True}
