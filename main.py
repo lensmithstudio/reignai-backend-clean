@@ -173,17 +173,17 @@ async def send_whatsapp_message(to: str, message: str):
 async def test_gemini_simple():
     """Simple test endpoint that works in browser"""
     try:
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash')
         response = model.generate_content("Say 'Hello from Gemini!' in one sentence.")
         return {
             "status": "success",
-            "model": "gemini-pro",
+            "model": "gemini-1.5-flash",
             "response": response.text
         }
     except Exception as e:
         return {
             "status": "error",
-            "model": "gemini-pro",
+            "model": "gemini-1.5-flash",
             "error": str(e)
         }
 
