@@ -168,7 +168,26 @@ async def send_whatsapp_message(to: str, message: str):
             logger.error(f"WhatsApp send failed: {response.text}")
             raise HTTPException(status_code=500, detail="Failed to send message")
 
-# Testing endpoint (bypass WhatsApp)
+# Simple GET test endpoint for browser testing
+@app.get("/test")
+async def test_gemini_simple():
+    """Simple test endpoint that works in browser"""
+    try:
+        model = genai.GenerativeModel('gemini-pro')
+        response = model.generate_content("Say 'Hello from Gemini!' in one sentence.")
+        return {
+            "status": "success",
+            "model": "gemini-pro",
+            "response": response.text
+        }
+    except Exception as e:
+        return {
+            "status": "error",
+            "model": "gemini-pro",
+            "error": str(e)
+        }
+
+# Testing endpoint (bypass WhatsApp) - requires POST with body
 @app.post("/test")
 async def test_message(msg: Message):
     """Direct test endpoint (no WhatsApp)"""
