@@ -178,3 +178,12 @@ async def test_message(msg: Message):
 if __name__ == "__main__":
     import uvicorn
     uvicorn.run(app, host="0.0.0.0", port=8000)
+    
+    @app.get("/debug")
+async def debug():
+    key = os.getenv("GEMINI_API_KEY", "")
+    return {
+        "key_exists": bool(key),
+        "key_length": len(key),
+        "first_4_chars": key[:4] if key else "NONE"
+    }
