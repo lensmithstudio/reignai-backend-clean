@@ -1,7 +1,7 @@
 from fastapi import FastAPI, Request, HTTPException
 from fastapi.middleware.cors import CORSMiddleware
 from pydantic import BaseModel
-import google.generativeai as genai
+import anthropic
 import os
 from supabase import create_client
 import logging
@@ -11,17 +11,17 @@ logger = logging.getLogger(__name__)
 
 app = FastAPI(title="ReignAI WhatsApp Agent")
 
-# CORS - update with your frontend domain
+# CORS
 app.add_middleware(
     CORSMiddleware,
-    allow_origins=["*"],  # Change to your frontend URL in prod
+    allow_origins=["*"],
     allow_credentials=True,
     allow_methods=["*"],
     allow_headers=["*"],
 )
 
-# Configure Gemini
-genai.configure(api_key=os.getenv("GEMINI_API_KEY"))
+# Anthropic client
+claude_client = anthropic.Anthropic(api_key=os.getenv("ANTHROPIC_API_KEY"))
 
 # Supabase client
 supabase = create_client(
@@ -43,7 +43,6 @@ class Message(BaseModel):
 async def health():
     return {"status": "healthy", "service": "ReignAI Agent"}
 
-# WhatsApp webhook verification
 @app.get("/webhook")
 async def verify_webhook(request: Request):
     params = request.query_params
@@ -57,13 +56,11 @@ async def verify_webhook(request: Request):
     else:
         raise HTTPException(status_code=403, detail="Verification failed")
 
-# WhatsApp incoming messages
 @app.post("/webhook")
 async def handle_message(request: Request):
     try:
         body = await request.json()
         
-        # Parse WhatsApp message structure
         entry = body.get("entry", [{}])[0]
         changes = entry.get("changes", [{}])[0]
         value = changes.get("value", {})
@@ -79,10 +76,7 @@ async def handle_message(request: Request):
         if not message_text:
             return {"status": "no_text"}
         
-        # Process with Gemini
         response = await process_with_claude(customer_number, message_text, "default")
-        
-        # Send reply via WhatsApp
         await send_whatsapp_message(customer_number, response["reply"])
         
         return {"status": "success", "escalated": response["escalated"]}
@@ -92,7 +86,7 @@ async def handle_message(request: Request):
         return {"status": "error", "detail": str(e)}
 
 async def process_with_claude(customer_number: str, message: str, org_id: str):
-    """Process message with Gemini and return response"""
+    """Process message with Claude and return response"""
     
     system_prompt = """You are a professional customer support agent for an e-commerce company.
 
@@ -106,20 +100,20 @@ Rules:
 If you need to escalate, end response with: [ESCALATE]"""
 
     try:
-        # Create Gemini model
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
+        response = claude_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=500,
+            system=system_prompt,
+            messages=[{
+                "role": "user",
+                "content": f"Customer message: {message}\n\nYour response:"
+            }]
+        )
         
-        # Generate response
-        full_prompt = f"{system_prompt}\n\nCustomer message: {message}\n\nYour response:"
-        response = model.generate_content(full_prompt)
-        
-        reply = response.text
+        reply = response.content[0].text
         escalated = "[ESCALATE]" in reply
-        
-        # Remove escalation marker from customer-facing message
         reply = reply.replace("[ESCALATE]", "").strip()
         
-        # Log to Supabase
         log_conversation(org_id, customer_number, message, reply, escalated)
         
         return {
@@ -129,7 +123,7 @@ If you need to escalate, end response with: [ESCALATE]"""
         }
         
     except Exception as e:
-        logger.error(f"Gemini API error: {e}")
+        logger.error(f"Claude API error: {e}")
         fallback_reply = "Sorry, I'm having trouble processing your request. A human agent will contact you shortly."
         log_conversation(org_id, customer_number, message, fallback_reply, True)
         return {"reply": fallback_reply, "escalated": True}
@@ -168,26 +162,27 @@ async def send_whatsapp_message(to: str, message: str):
             logger.error(f"WhatsApp send failed: {response.text}")
             raise HTTPException(status_code=500, detail="Failed to send message")
 
-# Simple GET test endpoint for browser testing
 @app.get("/test")
-async def test_gemini_simple():
-    """Simple test endpoint that works in browser"""
+async def test_claude_simple():
+    """Simple test endpoint"""
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash-latest')
-        response = model.generate_content("Say 'Hello from Gemini!' in one sentence.")
+        response = claude_client.messages.create(
+            model="claude-sonnet-4-20250514",
+            max_tokens=100,
+            messages=[{"role": "user", "content": "Say 'Hello from Claude!' in one sentence."}]
+        )
         return {
             "status": "success",
-            "model": "gemini-1.5-flash-latest",
-            "response": response.text
+            "model": "claude-sonnet-4-20250514",
+            "response": response.content[0].text
         }
     except Exception as e:
         return {
             "status": "error",
-            "model": "gemini-1.5-flash-latest",
+            "model": "claude-sonnet-4-20250514",
             "error": str(e)
         }
 
-# Testing endpoint (bypass WhatsApp) - requires POST with body
 @app.post("/test")
 async def test_message(msg: Message):
     """Direct test endpoint (no WhatsApp)"""
@@ -196,7 +191,7 @@ async def test_message(msg: Message):
 
 @app.get("/debug")
 async def debug():
-    key = os.getenv("GEMINI_API_KEY", "")
+    key = os.getenv("ANTHROPIC_API_KEY", "")
     return {
         "key_exists": bool(key),
         "key_length": len(key),
