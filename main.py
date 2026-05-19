@@ -107,7 +107,7 @@ If you need to escalate, end response with: [ESCALATE]"""
 
     try:
         # Create Gemini model
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         
         # Generate response
         full_prompt = f"{system_prompt}\n\nCustomer message: {message}\n\nYour response:"
@@ -173,17 +173,17 @@ async def send_whatsapp_message(to: str, message: str):
 async def test_gemini_simple():
     """Simple test endpoint that works in browser"""
     try:
-        model = genai.GenerativeModel('gemini-1.5-flash')
+        model = genai.GenerativeModel('gemini-1.5-flash-latest')
         response = model.generate_content("Say 'Hello from Gemini!' in one sentence.")
         return {
             "status": "success",
-            "model": "gemini-1.5-flash",
+            "model": "gemini-1.5-flash-latest",
             "response": response.text
         }
     except Exception as e:
         return {
             "status": "error",
-            "model": "gemini-1.5-flash",
+            "model": "gemini-1.5-flash-latest",
             "error": str(e)
         }
 
