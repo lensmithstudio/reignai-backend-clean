@@ -107,7 +107,7 @@ If you need to escalate, end response with: [ESCALATE]"""
 
     try:
         # Create Gemini model
-        model = genai.GenerativeModel('gemini-pro')
+        model = genai.GenerativeModel('models/gemini-pro')
         
         # Generate response
         full_prompt = f"{system_prompt}\n\nCustomer message: {message}\n\nYour response:"
