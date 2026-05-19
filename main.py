@@ -175,11 +175,7 @@ async def test_message(msg: Message):
     response = await process_with_claude(msg.customer_number, msg.message, msg.org_id)
     return response
 
-if __name__ == "__main__":
-    import uvicorn
-    uvicorn.run(app, host="0.0.0.0", port=8000)
-    
-    @app.get("/debug")
+@app.get("/debug")
 async def debug():
     key = os.getenv("GEMINI_API_KEY", "")
     return {
@@ -187,3 +183,7 @@ async def debug():
         "key_length": len(key),
         "first_4_chars": key[:4] if key else "NONE"
     }
+
+if __name__ == "__main__":
+    import uvicorn
+    uvicorn.run(app, host="0.0.0.0", port=8000)
